@@ -6,6 +6,7 @@ const Upload = require('../config/common/upload');
 const Products = require('../models/products');
 const Categorys = require('../models/categorys');
 const Users = require('../models/users');
+const Orders = require('../models/orders');
 
 router.get('/getListCategory', async (req, res) => {
     try {
@@ -366,8 +367,9 @@ router.post('/ProductWithImage', Upload.array('image',5),async (req,res) => {
             status: data.status,
             image: urlsImage,
             isFavorite: data.isFavorite,
-            id_category: data.id_category,
-            quantity: data.quantity
+            quantity: data.quantity,
+            id_category: data.id_category
+            
         });
         console.log(newFruit.quantity);
         const result = (await newFruit.save()).populate('id_category');
@@ -455,10 +457,314 @@ router.get('/search-Category', async (req, res) => {
     } catch (error) {
         console.log(error);
     }
+});
+
+//search
+router.get('/search-Product', async (req, res) => {
+    try {
+        const key = req.query.key
+
+        const data = await Products.find({ name: { "$regex": key, "$options": "i" } })
+            // .sort({ createdAt: -1 });
+
+        if (data) {
+            res.json({
+                "status": 200,
+                "messenger": "Thành công",
+                "data": data
+            })
+        } else {
+            res.json({
+                "status": 400,
+                "messenger": "Lỗi, không thành công",
+                "data": []
+            })
+        }
+    } catch (error) {
+        console.log(error);
+    }
+});
+
+//Favourite
+router.put('/toggle-favourite/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Tìm sản phẩm theo ID
+        const product = await Products.findById(id);
+
+
+        // Đổi giá trị isFavourite
+        product.isFavorite = !product.isFavorite;
+
+        // Lưu lại sản phẩm đã chỉnh sửa
+        const result = await product.save();
+
+        if (result) {
+            res.json({
+                "status": 200,
+                "messenger": "Thành công",
+                "data": await Products.find()
+            });
+        } else {
+            res.json({
+                "status": 400,
+                "messenger": "Lỗi, không thành công",
+                "data": []
+            })
+        }
+    } catch (error) {
+        console.log(error);
+    }
+});
+
+router.get('/getListProductByFavourite', async (req, res) => {
+    // const { isFavorite } = req.query; // Lấy isFavorite từ query parameter
+
+    try {
+        const products = await Products.find({ isFavorite: true }).populate('id_category');
+        res.status(200).json({ status: 200, msg: 'Lấy sản phẩm thành công', data: products });
+    } catch (err) {
+        res.status(500).json({ status: 500, msg: 'Lỗi server', error: err.message });
+    }
+});
+
+
+router.get('/getListProductByCategory', async (req, res) => {
+    try {
+        // Lấy id_category từ query string
+        const { id_category } = req.query; 
+
+        if (!id_category) {
+            return res.status(400).json({
+                status: 400,
+                message: 'id_category không được phép trống.',
+                data: []
+            });
+        }
+
+        // Tìm sản phẩm theo id_category và trả về thông tin chi tiết của từng sản phẩm
+        const products = await Products.find({ id_category: id_category }).populate('id_category', 'name');
+
+        if (products.length > 0) {
+            res.status(200).json({
+                status: 200,
+                message: 'Lấy sản phẩm theo danh mục thành công',
+                data: products
+            });
+        } else {
+            res.status(404).json({
+                status: 404,
+                message: 'Không tìm thấy sản phẩm trong danh mục này.',
+                data: []
+            });
+        }
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({
+            status: 500,
+            message: 'Lỗi server',
+            error: error.message
+        });
+    }
+});
+
+
+
+router.post('/add-order', async (req, res) => {
+    try {
+        const data = req.body;
+        const newOrder = new Orders({
+            order_code: data.order_code,
+            id_user: data.id_user
+        })
+        const result = await newOrder.save(); // Thêm vào database
+        if (result) {
+            res.json({
+                "status": 200,
+                "messenger": "Thêm thành công",
+                "data": result
+            })
+        } else {
+            // Nếu thêm không thành công result null, thông báo không thành công
+            res.json({
+                "status": 400,
+                "messenger": "Lỗi, thêm không thành công",
+                "data": null
+            })
+        }
+    } catch (error) {
+        console.log(error);
+    }
+
+    
+});
+
+
+
+router.get('/get-list-order', async (req, res) => {
+    try {
+        const { id_user } = req.query;
+
+        const result = await Orders.find({ id_user: id_user }); 
+        if (result) {
+            // Nếu thành công, trả về dữ liệu đơn hàng
+            res.json({
+                "status": 200,
+                "messenger": "Thêm thành công",
+                "data": result
+            })
+        } else {
+            // Nếu thất bại, thông báo lỗi
+            res.json({
+                "status": 400,
+                "messenger": "Lỗi, thêm không thành công",
+                "data": null
+            })
+        }
+    } catch (error) {
+        console.log(error);
+    }
+});
+
+// const Transporter = require('../config/common/mail')
+// router.post('/register-send-email', Upload.single('avartar'), async (req, res) => {
+//     try {
+//       const data = req.body;
+//       const { file } = req;    
+//     //   const avatarUrl = `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+  
+//     //   const newUser = new Users({
+//     //     email,
+//     //     password,
+//     //     avartar: avatarUrl // Lưu đường dẫn đến ảnh
+//     //   });
+
+//     const newUser = Users({
+//         email: data.email,
+//         password: data.password,
+//         avartar: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`
+//     });
+
+//       const result = await newUser.save();
+//       if (result) {
+//         res.json({
+//           status: 200,
+//           message: "Registration successful",
+//           data: result
+//         });
+//       } else {
+//         res.status(400).json({
+//           status: 400,
+//           message: "Failed to register user"
+//         });
+//       }
+//     } catch (error) {
+//       console.error(error);
+//       res.status(500).json({ message: "Internal Server Error" });
+//     }
+// });
+
+
+  router.post('/register-send-email', Upload.single('avartar'), async (req, res) => {
+    try {
+        const data = req.body;
+        const { file } = req
+        console.log(data);
+        const newUser = Users({
+            username: data.username,
+            password: data.password,
+            email: data.email,
+            name: data.name,
+            avartar: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`,
+        })
+        const result = await newUser.save();
+        if (result) {
+            res.json({
+            status: 200,
+            message: "Registration successful",
+            data: result
+            });
+        } else {
+            res.status(400).json({
+            status: 400,
+            message: "Failed to register user"
+            });
+        }
+        } catch (error) {
+        console.error(error);
+        }
+});
+
+
+const JWT = require('jsonwebtoken');
+const SECRETKEY = "FPTPOLYTECHNIC"
+router.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const user = await Users.findOne({ username, password });
+        console.log(username + '-' + password);
+        if (user) {
+            const token = JWT.sign({ id: user._id }, SECRETKEY, { expiresIn: '1h' });
+            const refreshToken = JWT.sign({ id: user._id }, SECRETKEY, { expiresIn: '1d' })
+            //expiresIn thời gian token
+            res.json({
+                "status": 200,
+                "messenger": "Đăng nhâp thành công",
+                "data": user,
+                "token": token,
+                "refreshToken": refreshToken
+            })
+        } else {
+            res.json({
+                "status": 404,
+                "messenger": "Lỗi, đăng nhập không thành công",
+                "data": []
+            })
+        }
+    } catch (error) {
+        console.log(error);
+    }
 })
 
+// router.post('/login', async (req, res) => {
+//     try {
+//         const { email, password } = req.body;  // Lấy dữ liệu từ request body
 
+//         // Kiểm tra xem email có tồn tại trong DB không
+//         const user = await User.findOne({ email });
+//         if (!user) {
+//             return res.status(400).json({ message: 'Email không tồn tại' });
+//         }
 
+//         // So sánh mật khẩu từ client với mật khẩu đã mã hóa trong DB
+//         const isMatch = await bcrypt.compare(password, user.password);
+//         if (!isMatch) {
+//             return res.status(400).json({ message: 'Mật khẩu không đúng' });
+//         }
+
+//         // Nếu đăng nhập thành công, tạo JWT token
+//         const token = jwt.sign(
+//             { userId: user._id, email: user.email },
+//             'secretKey', // Mã bí mật cho JWT (cần thay đổi thành giá trị bảo mật hơn)
+//             { expiresIn: '1h' }  // Token hết hạn sau 1 giờ
+//         );
+
+//         // Trả về token và thông tin người dùng
+//         res.json({
+//             status: 200,
+//             message: 'Đăng nhập thành công',
+//             token,  // Trả về token JWT cho client
+//             user: {
+//                 email: user.email,
+//                 avatar: user.avatar,  // Nếu có trường avatar trong DB
+//             }
+//         });
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ message: 'Lỗi server' });
+//     }
+// });
 
 
 module.exports = router;
